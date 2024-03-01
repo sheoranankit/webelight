@@ -1,35 +1,50 @@
 pipeline {
     agent any
-
+    environment {
+        // Define environment variables
+        REMOTE_SERVER = '15.206.168.162'
+        REMOTE_USER = 'ubuntu'
+        DOCKER_IMAGE_NAME = 'sheoran8744/webelight'
+        DOCKERFILE_PATH = 'webelight/Dockerfile'
+    }
     stages {
         stage('Checkout') {
             steps {
                 // Checkout the source code from your version control system (e.g., Git)
-                sshagent(['dbe55d01-34c6-4469-a746-b1717199f312']){
-                sh "ssh ${REMOTE_USER}@${REMOTE_SERVER} 'git pull origin main'"
-                }
+                checkout scm
             }
         }
 
         stage('Build') {
             steps {
-                sshagent(['dbe55d01-34c6-4469-a746-b1717199f312']){
-                // Execute build commands
-                sh 'docker build -t sheoran8744/webelight:1'
-                sh 'docker push sheoran8744/webelight:1'
+                // Build Docker image
+                script {
+                    docker.build("${DOCKER_IMAGE_NAME}:${BUILD_NUMBER}")
                 }
             }
         }
 
-        stage('Deploy') {
+        stage('Deploy to Docker Registry') {
+            steps {
+                // Push Docker image to a registry (if needed)
+                script {
+                    docker.withRegistry('https://index.docker.io/v1/', '05885758-9964-470a-b6d6-7878c99dbe38') {
+                        docker.image("${DOCKER_IMAGE_NAME}:${BUILD_NUMBER}").push()
+                    }
+                }
+            }
+        }
+
+        stage('Deploy to Remote Server') {
             steps {
                 script {
-                    // SSH into the remote server and deploy the application
-                    sshagent(['dbe55d01-34c6-4469-a746-b1717199f312']) {
-                        sh "ssh ${REMOTE_USER}@${REMOTE_SERVER} 'mkdir -p ${REMOTE_DIR}'"
-                        sh "scp target/your_application.jar ${REMOTE_USER}@${REMOTE_SERVER}:${REMOTE_DIR}"
-                        // Add any additional deployment steps
-                    }
+                    // Deploy the Docker container on the remote server
+                    sh "ssh ${NODE_NAME} 'mkdir -p ${REMOTE_DIR}'"
+                    sh "scp ${DOCKERFILE_PATH} ${NODE_NAME}:${REMOTE_DIR}"
+                    sh "scp docker-compose.yml ${NODE_NAME}:${REMOTE_DIR}" // if using Docker Compose
+                    sh "scp .env ${NODE_NAME}:${REMOTE_DIR}" // if using environment variables
+                    sh "ssh ${NODE_NAME} 'cd ${REMOTE_DIR} && docker-compose up -d'"
+                    // Add any additional deployment steps
                 }
             }
         }

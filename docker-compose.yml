@@ -1,0 +1,11 @@
+version: '3.8'
+services:
+  webelight:
+    image: sheoran8744/webelight
+    user: node
+    ports:
+      - 5000:5000
+    networks:
+      - webelight-networks
+networks:
+  webelight-networks:
